@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+     
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title></title>
+    <link rel="stylesheet" href="">
+    <style type="text/css" media="screen">
+        video, canvas {
+            background-color: #e9e9e9;
+            margin:0 auto;
+            display: block;
+        }
+        body {
+            text-align: center;
+        }
+        video {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas width="320px" height="240px">
+    
+    </canvas>
+    <video src="" width="320px" height="240px" controls muted></video>
+    <button type="button" class="start">开始</button>
+</body>
+
+
+<script type="text/javascript">
+    var ws = new WebSocket("ws://127.0.0.1:9501");
+    var imgChuncks = [];
+    var audioChuncks = [];
+    var img = null;
+    //如何处理二进制数据，默认是Blob
+    ws.binaryType = 'arraybuffer',
+    ws.onmessage = function(evt) { 
+        // if(evt.data.byteLength === undefined) {
+        //     //收到的base64图片
+        //     imgChuncks.push(evt.data);
+        // }else{
+        //     //收到的音频二进制pcm数据
+        //     audioChuncks.push(new Float32Array(evt.data));
+        // }
+        // //缓存2帧的数据后开始播放
+        // if(!img && audioChuncks.length > 2){
+        //     myplay();
+        // }
+    };
+    ws.onopen = function(){
+        console.log("连接成功")
+        dorw();
+    }
+    ws.onclose = function(){
+        console.log("连接断开")
+    }
+    //创建播放音频视频函数
+    var dorw = function myplay(){
+        //创建img标签来播放base64图片
+        img = new Image();
+        document.body.appendChild(img);
+        //创建播放音频对象
+        var myBuffer = audioCtx.createBuffer(1, 2048, audioCtx.sampleRate);
+        var source = audioCtx.createBufferSource();
+        var recorder = audioCtx.createScriptProcessor(2048, 1, 1);
+        source.connect(recorder);
+        recorder.connect(audioCtx.destination);
+        recorder.onaudioprocess = function(ev){
+               //修改img的src达到视频的效果
+               img.src = imgChuncks.shift();
+               //播放audioChuncks里面真正的二进制数据
+            ev.outputBuffer.copyToChannel(audioChuncks.shift() || new Float32Array(2048), 0, 0);
+        };
+    }
+    var video = document.querySelector('video');
+    var start = document.querySelector('.start');
+    var stop = document.querySelector('.stop');
+    var canvas = document.querySelector('canvas');
+    var ctx = canvas.getContext('2d');
+    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var interval = null;
+    var mediaDevices = null;
+    //点击开始
+    start.onclick = function(){
+        //获取音频视频流数据
+        mediaDevices = navigator.mediaDevices.getUserMedia({audio: true,video: { width: 320, height: 240 }});
+        mediaDevices.then(stream => {
+            //视频流转换到video标签播放
+            video.srcObject = stream;
+            video.play();
+            //音频流转换到AudioNode做数据采集
+            var source = audioCtx.createMediaStreamSource(stream);
+            recorder = audioCtx.createScriptProcessor(2048, 1, 1);
+            source.connect(recorder);
+            recorder.connect(audioCtx.destination);
+            recorder.onaudioprocess = function(ev){
+                //采集单声道数据
+                var inputBuffer = ev.inputBuffer.getChannelData(0);
+                //将视频画面转换成base64发送
+                ws.send(canvas.toDataURL('image/jpeg'));
+                //发送音频pcm数据
+                ws.send(inputBuffer.buffer);
+            };
+        });
+    };
+    video.onplay = function(){
+        //将video绘制到canvas上
+        interval = setInterval(function(){
+            ctx.drawImage(video, 0, 0);
+        },30);
+    };
+</script>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>视频录制</title>
+</head>
+<body>
+<div class="demo-wrapper">
+
+    <video id="video" width="640" height="480" autoplay="" playsinline muted></video>
+
+    <canvas id="mycanvas" width="640" height="480"></canvas>
+
+</div>
+<script type="text/javascript">
+    var ws = new WebSocket("ws://127.0.0.1:9501");
+
+    var back = document.getElementById('mycanvas');
+    var backcontext = back.getContext('2d');
+    var video = document.querySelector('video');
+
+    //定义推送位置
+    var success = function(stream) {
+        // video.src = window.URL.createObjectURL(stream)
+        video.srcObject = stream;
+        video.onloadedmetadata = function(e) {
+            video.play();
+        };
+    };
+    //定义错误
+    var err = function(err) {
+        alert("The following error occurred: " + err.name);
+    };
+
+    ws.onopen = function(){
+        draw();
+    };
+    var draw = function(){
+        try{
+            backcontext.drawImage(video,0,0, back.width, back.height);
+        }catch(e){
+            if (e.name == "NS_ERROR_NOT_AVAILABLE") {
+                return setTimeout(draw, 100);
+            } else {
+                throw e;
+            }
+        }
+        if(video){
+            ws.send(back.toDataURL("image/jpeg", 0.5));
+        }
+        setTimeout(draw,100);
+    };
+
+    // 创建摄像头
+    navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+
+    if (navigator.getUserMedia) {
+        navigator.getUserMedia({audio: true,video: {width: 1280,height: 720}},success,console.log
+        );
+    } else {
+        var div = document.createElement("div");
+        div.innerHTML = 'getUserMedia not supported';
+        document.body.appendChild(div);
+        alert("getUserMedia not supported");
+    }
+
+</script>
+</body>
+</html>
